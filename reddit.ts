@@ -1,9 +1,5 @@
 import { fetch } from "undici";
-import {
-  MAX_ERROR_BODY_BYTES,
-  MAX_RESPONSE_BYTES,
-  readBodyCapped,
-} from "./shared.js";
+import { MAX_ERROR_BODY_BYTES, MAX_RESPONSE_BYTES, readBodyCapped } from "./shared.js";
 
 const REDDIT_BASE = "https://www.reddit.com";
 const USER_AGENT =
@@ -123,8 +119,7 @@ function loadCookieHeader(): string {
 }
 
 function listingChildren(value: unknown): Array<RecordValue> {
-  if (!isRecord(value) || !isRecord(value.data) || !Array.isArray(value.data.children))
-    return [];
+  if (!isRecord(value) || !isRecord(value.data) || !Array.isArray(value.data.children)) return [];
   return value.data.children.filter(isRecord);
 }
 
@@ -161,7 +156,11 @@ function formatPost(data: RecordValue): { text: string; title?: string } {
   const lines = [
     `# ${title}`,
     "",
-    [subreddit && `r/${subreddit}`, `u/${author}`, score === undefined ? undefined : `${score} points`]
+    [
+      subreddit && `r/${subreddit}`,
+      `u/${author}`,
+      score === undefined ? undefined : `${score} points`,
+    ]
       .filter(Boolean)
       .join(" · "),
   ];
@@ -235,7 +234,9 @@ function formatResponse(payload: unknown): { text: string; title?: string } {
 }
 
 function isHtml(body: string, contentType: string | null): boolean {
-  return contentType?.toLowerCase().includes("text/html") === true || /<(!doctype|html)\b/i.test(body);
+  return (
+    contentType?.toLowerCase().includes("text/html") === true || /<(!doctype|html)\b/i.test(body)
+  );
 }
 
 export async function fetchReddit(url: URL, signal: AbortSignal): Promise<RedditFetchResult> {
@@ -248,10 +249,7 @@ export async function fetchReddit(url: URL, signal: AbortSignal): Promise<Reddit
   });
   const contentType = response.headers.get("content-type");
   const body = (
-    await readBodyCapped(
-      response,
-      response.ok ? MAX_RESPONSE_BYTES : MAX_ERROR_BODY_BYTES,
-    )
+    await readBodyCapped(response, response.ok ? MAX_RESPONSE_BYTES : MAX_ERROR_BODY_BYTES)
   ).toString("utf8");
   const html = isHtml(body, contentType);
   if (!response.ok) {

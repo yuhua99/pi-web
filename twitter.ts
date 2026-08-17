@@ -1,9 +1,5 @@
 import { fetch } from "undici";
-import {
-  MAX_ERROR_BODY_BYTES,
-  MAX_RESPONSE_BYTES,
-  readBodyCapped,
-} from "./shared.js";
+import { MAX_ERROR_BODY_BYTES, MAX_RESPONSE_BYTES, readBodyCapped } from "./shared.js";
 
 const X_BASE = "https://x.com";
 const TWEET_DETAIL_QUERY_ID = "xd_EMdYvB9hfZsZ6Idri0w";
@@ -65,7 +61,12 @@ type Tweet = {
 
 export function isTwitterUrl(url: URL): boolean {
   const host = url.hostname.toLowerCase();
-  return host === "x.com" || host === "twitter.com" || host.endsWith(".x.com") || host.endsWith(".twitter.com");
+  return (
+    host === "x.com" ||
+    host === "twitter.com" ||
+    host.endsWith(".x.com") ||
+    host.endsWith(".twitter.com")
+  );
 }
 
 function isRecord(value: unknown): value is RecordValue {
@@ -100,7 +101,9 @@ function tweetIdFromUrl(url: URL): string {
 
   const parts = url.pathname.split("/").filter(Boolean);
   const id =
-    parts[0]?.toLowerCase() === "i" && parts[1]?.toLowerCase() === "web" && parts[2]?.toLowerCase() === "status"
+    parts[0]?.toLowerCase() === "i" &&
+    parts[1]?.toLowerCase() === "web" &&
+    parts[2]?.toLowerCase() === "status"
       ? parts[3]
       : parts[1]?.toLowerCase() === "status"
         ? parts[2]
@@ -195,13 +198,16 @@ function collectTweets(value: unknown, tweets: Tweet[], seen: Set<string>): void
 }
 
 function tweetTitle(tweet: Tweet): string {
-  const author = tweet.screenName ? `@${tweet.screenName}` : tweet.name ?? "Tweet";
-  const firstLine = tweet.text.split("\n").find((line) => line.trim())?.trim();
+  const author = tweet.screenName ? `@${tweet.screenName}` : (tweet.name ?? "Tweet");
+  const firstLine = tweet.text
+    .split("\n")
+    .find((line) => line.trim())
+    ?.trim();
   return firstLine ? `${author}: ${shorten(firstLine, 160)}` : author;
 }
 
 function formatTweet(tweet: Tweet, heading: string, limit?: number): string {
-  const author = tweet.screenName ? `@${tweet.screenName}` : tweet.name ?? "Unknown user";
+  const author = tweet.screenName ? `@${tweet.screenName}` : (tweet.name ?? "Unknown user");
   const details = [
     tweet.name && tweet.screenName ? tweet.name : undefined,
     tweet.createdAt,
@@ -224,7 +230,7 @@ function formatResponse(payload: unknown, id: string): { text: string; title?: s
   const tweetsById = new Map(tweets.map((tweet) => [tweet.id, tweet]));
   const ancestors: Tweet[] = [];
   const ancestorIds = new Set<string>();
-  for (let parentId = focal.inReplyToId; parentId && !ancestorIds.has(parentId); ) {
+  for (let parentId = focal.inReplyToId; parentId && !ancestorIds.has(parentId);) {
     const parent = tweetsById.get(parentId);
     if (!parent || parent.id === focal.id) break;
     ancestors.push(parent);
@@ -237,7 +243,7 @@ function formatResponse(payload: unknown, id: string): { text: string; title?: s
     .filter((tweet) => {
       if (tweet.id === focal.id || ancestorIds.has(tweet.id)) return false;
       const seen = new Set<string>();
-      for (let current: Tweet | undefined = tweet; current?.inReplyToId && !seen.has(current.id); ) {
+      for (let current: Tweet | undefined = tweet; current?.inReplyToId && !seen.has(current.id);) {
         seen.add(current.id);
         if (current.inReplyToId === focal.id) return true;
         current = tweetsById.get(current.inReplyToId);
@@ -248,17 +254,27 @@ function formatResponse(payload: unknown, id: string): { text: string; title?: s
   const text = [
     formatTweet(focal, "#"),
     ...(ancestors.length
-      ? ["", "## Context", ...ancestors.flatMap((tweet) => ["", formatTweet(tweet, "-", MAX_REPLY_LENGTH)])]
+      ? [
+          "",
+          "## Context",
+          ...ancestors.flatMap((tweet) => ["", formatTweet(tweet, "-", MAX_REPLY_LENGTH)]),
+        ]
       : []),
     ...(replies.length
-      ? ["", "## Replies", ...replies.flatMap((tweet) => ["", formatTweet(tweet, "-", MAX_REPLY_LENGTH)])]
+      ? [
+          "",
+          "## Replies",
+          ...replies.flatMap((tweet) => ["", formatTweet(tweet, "-", MAX_REPLY_LENGTH)]),
+        ]
       : []),
   ].join("\n");
   return { text, title: tweetTitle(focal) };
 }
 
 function isHtml(body: string, contentType: string | null): boolean {
-  return contentType?.toLowerCase().includes("text/html") === true || /<(!doctype|html)\b/i.test(body);
+  return (
+    contentType?.toLowerCase().includes("text/html") === true || /<(!doctype|html)\b/i.test(body)
+  );
 }
 
 export async function fetchTwitter(url: URL, signal: AbortSignal): Promise<TwitterFetchResult> {
@@ -284,10 +300,7 @@ export async function fetchTwitter(url: URL, signal: AbortSignal): Promise<Twitt
   });
   const contentType = response.headers.get("content-type");
   const body = (
-    await readBodyCapped(
-      response,
-      response.ok ? MAX_RESPONSE_BYTES : MAX_ERROR_BODY_BYTES,
-    )
+    await readBodyCapped(response, response.ok ? MAX_RESPONSE_BYTES : MAX_ERROR_BODY_BYTES)
   ).toString("utf8");
   const html = isHtml(body, contentType);
   if (!response.ok) {

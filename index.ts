@@ -29,14 +29,12 @@ const webfetchSchema = Type.Object(
     url: Type.String({ description: "URL to fetch." }),
     raw: Type.Optional(
       Type.Boolean({
-        description:
-          "Return the raw response body without extraction (default: false).",
+        description: "Return the raw response body without extraction (default: false).",
       }),
     ),
     format: Type.Optional(
       Type.Union([Type.Literal("markdown"), Type.Literal("html")], {
-        description:
-          "Output format for extracted main content (default: markdown).",
+        description: "Output format for extracted main content (default: markdown).",
       }),
     ),
   },
@@ -46,9 +44,7 @@ const webfetchSchema = Type.Object(
 const websearchSchema = Type.Object(
   {
     query: Type.String({ description: "Search query." }),
-    numResults: Type.Optional(
-      Type.Integer({ description: "Number of results to return." }),
-    ),
+    numResults: Type.Optional(Type.Integer({ description: "Number of results to return." })),
   },
   { additionalProperties: false },
 );
@@ -133,15 +129,9 @@ function parseIPv6(ip: string): number[] | null {
   const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
   const missing = 8 - head.length - tail.length;
   if (halves.length === 1 ? head.length !== 8 : missing < 0) return null;
-  const groups = [
-    ...head,
-    ...Array(halves.length === 2 ? missing : 0).fill("0"),
-    ...tail,
-  ];
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill("0"), ...tail];
   if (groups.length !== 8) return null;
-  const parts = groups.map((group) =>
-    /^[0-9a-f]{1,4}$/.test(group) ? parseInt(group, 16) : NaN,
-  );
+  const parts = groups.map((group) => (/^[0-9a-f]{1,4}$/.test(group) ? parseInt(group, 16) : NaN));
   return parts.some(Number.isNaN) ? null : parts;
 }
 
@@ -158,11 +148,7 @@ function isBlockedIp(ip: string): boolean {
     }
   }
   const group = parts[0]!;
-  return (
-    (group & 0xffc0) === 0xfe80 ||
-    (group & 0xfe00) === 0xfc00 ||
-    (group & 0xff00) === 0xff00
-  );
+  return (group & 0xffc0) === 0xfe80 || (group & 0xfe00) === 0xfc00 || (group & 0xff00) === 0xff00;
 }
 
 function assertHostAllowed(url: URL): void {
@@ -171,9 +157,7 @@ function assertHostAllowed(url: URL): void {
     throw new PolicyError(`webfetch blocked non-public host: ${url.hostname}`);
   }
   if (isIP(host) && isBlockedIp(host)) {
-    throw new PolicyError(
-      `webfetch blocked non-public address: ${url.hostname}`,
-    );
+    throw new PolicyError(`webfetch blocked non-public address: ${url.hostname}`);
   }
 }
 
@@ -243,9 +227,7 @@ function createCookieJar(): CookieJar {
 
   function absorb(url: URL, response: FetchResponse) {
     const raws =
-      typeof response.headers.getSetCookie === "function"
-        ? response.headers.getSetCookie()
-        : [];
+      typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
     const host = url.hostname.toLowerCase();
     for (const raw of raws) {
       const eq = raw.indexOf("=");
@@ -262,16 +244,11 @@ function createCookieJar(): CookieJar {
       let rejected = false;
       for (const part of raw.split(";").slice(1)) {
         const attrEq = part.indexOf("=");
-        const key = (attrEq === -1 ? part : part.slice(0, attrEq))
-          .trim()
-          .toLowerCase();
+        const key = (attrEq === -1 ? part : part.slice(0, attrEq)).trim().toLowerCase();
         const attrVal = attrEq === -1 ? "" : part.slice(attrEq + 1).trim();
         if (key === "domain" && attrVal) {
           const candidate = attrVal.replace(/^\./, "").toLowerCase();
-          if (
-            !candidate.includes(".") ||
-            (host !== candidate && !host.endsWith(`.${candidate}`))
-          ) {
+          if (!candidate.includes(".") || (host !== candidate && !host.endsWith(`.${candidate}`))) {
             rejected = true;
             break;
           }
@@ -300,16 +277,9 @@ function createCookieJar(): CookieJar {
         path = "/";
       }
       const index = cookies.findIndex(
-        (cookie) =>
-          cookie.name === name &&
-          cookie.domain === domain &&
-          cookie.path === path,
+        (cookie) => cookie.name === name && cookie.domain === domain && cookie.path === path,
       );
-      if (
-        maxAge !== undefined
-          ? maxAge <= 0
-          : expires !== undefined && expires <= Date.now()
-      ) {
+      if (maxAge !== undefined ? maxAge <= 0 : expires !== undefined && expires <= Date.now()) {
         if (index >= 0) cookies.splice(index, 1);
         continue;
       }
@@ -364,10 +334,7 @@ async function fetchWithPolicy(
       );
     }
     assertHostAllowed(current);
-    const { signal: hopSignal, cleanup } = createHopSignal(
-      signal,
-      hopTimeoutMs(deadline),
-    );
+    const { signal: hopSignal, cleanup } = createHopSignal(signal, hopTimeoutMs(deadline));
     const headers: Record<string, string> = {
       Accept: acceptForFormat(format),
       "User-Agent": DEFAULT_USER_AGENT,
@@ -454,10 +421,7 @@ async function fetchWithRetry(
         retries < 2
       ) {
         await result.response.body?.cancel();
-        await waitForRetry(
-          signal,
-          (retries === 0 ? 500 : 1000) + Math.floor(Math.random() * 100),
-        );
+        await waitForRetry(signal, (retries === 0 ? 500 : 1000) + Math.floor(Math.random() * 100));
         retries += 1;
         continue;
       }
@@ -470,10 +434,7 @@ async function fetchWithRetry(
         retries >= 2
       )
         throw error;
-      await waitForRetry(
-        signal,
-        (retries === 0 ? 500 : 1000) + Math.floor(Math.random() * 100),
-      );
+      await waitForRetry(signal, (retries === 0 ? 500 : 1000) + Math.floor(Math.random() * 100));
       retries += 1;
     }
   }
@@ -493,9 +454,7 @@ function charsetFromHtmlMeta(buf: Buffer): string | undefined {
   const head = buf.subarray(0, Math.min(buf.length, 4096)).toString("latin1");
   const match =
     head.match(/<meta\b[^>]*\bcharset\s*=\s*["']?\s*([^"'\s/>]+)/i) ||
-    head.match(
-      /<meta\b[^>]*\bcontent\s*=\s*["'][^"']*charset\s*=\s*([^"'\s/>]+)/i,
-    );
+    head.match(/<meta\b[^>]*\bcontent\s*=\s*["'][^"']*charset\s*=\s*([^"'\s/>]+)/i);
   return match?.[1]?.toLowerCase();
 }
 
@@ -530,26 +489,21 @@ function classifyBlock(
   const content = body.toLowerCase();
   const server = response.headers.get("server")?.toLowerCase() ?? "";
   if (response.status === 429) return "rate_limited";
-  if (response.headers.get("cf-mitigated") === "challenge")
-    return "cloudflare_challenge";
+  if (response.headers.get("cf-mitigated") === "challenge") return "cloudflare_challenge";
   if (response.status === 403 || response.status === 503) {
     if (
-      ["just a moment", "cf-browser-verification", "cf-chl", "challenge-platform"].some(
-        (marker) => content.includes(marker),
+      ["just a moment", "cf-browser-verification", "cf-chl", "challenge-platform"].some((marker) =>
+        content.includes(marker),
       )
     )
       return "cloudflare_challenge";
-    if (
-      content.includes("making sure you're not a bot") ||
-      /\banubis\b/.test(content)
-    )
+    if (content.includes("making sure you're not a bot") || /\banubis\b/.test(content))
       return "anubis_bot_check";
   }
   if (
     content.includes("blocked by network security") ||
     content.includes("incapsula incident id") ||
-    ((server.includes("akamai") || server.includes("imperva")) &&
-      content.includes("access denied"))
+    ((server.includes("akamai") || server.includes("imperva")) && content.includes("access denied"))
   )
     return "waf_blocked";
   if (response.status === 401 || response.status === 403) return "access_denied";
@@ -577,9 +531,7 @@ function requestError(response: FetchResponse, url: URL, body: string): Error {
   );
 }
 
-function extractText(result: {
-  content?: Array<{ type: string; text?: string }>;
-}): string {
+function extractText(result: { content?: Array<{ type: string; text?: string }> }): string {
   return (
     result.content
       ?.map((block) => (block.type === "text" ? (block.text ?? "") : ""))
@@ -614,8 +566,7 @@ function toJsonString(value: unknown): string {
 function resolveEndpoint(): { endpoint: string; apiKey?: string } {
   const apiKey = process.env.EXA_API_KEY?.trim() || undefined;
   const url = new URL(DEFAULT_EXA_ENDPOINT);
-  if (apiKey && !url.searchParams.has("exaApiKey"))
-    url.searchParams.set("exaApiKey", apiKey);
+  if (apiKey && !url.searchParams.has("exaApiKey")) url.searchParams.set("exaApiKey", apiKey);
   url.searchParams.set("tools", "web_search_exa");
   return { endpoint: url.toString(), apiKey };
 }
@@ -623,8 +574,7 @@ function resolveEndpoint(): { endpoint: string; apiKey?: string } {
 function redactEndpoint(endpoint: string): string {
   try {
     const url = new URL(endpoint);
-    if (url.searchParams.has("exaApiKey"))
-      url.searchParams.set("exaApiKey", "REDACTED");
+    if (url.searchParams.has("exaApiKey")) url.searchParams.set("exaApiKey", "REDACTED");
     return url.toString();
   } catch {
     return endpoint;
@@ -633,19 +583,12 @@ function redactEndpoint(endpoint: string): string {
 
 function redact(message: string, apiKey: string | undefined): string {
   if (!apiKey) return message;
-  return message
-    .replaceAll(apiKey, "REDACTED")
-    .replaceAll(encodeURIComponent(apiKey), "REDACTED");
+  return message.replaceAll(apiKey, "REDACTED").replaceAll(encodeURIComponent(apiKey), "REDACTED");
 }
 
-function extractJsonRpcResponse(
-  response: unknown,
-  requestId: string,
-): JsonRpcResponse {
+function extractJsonRpcResponse(response: unknown, requestId: string): JsonRpcResponse {
   if (Array.isArray(response)) {
-    const match = response.find(
-      (item) => isJsonRpcResponse(item) && item.id === requestId,
-    );
+    const match = response.find((item) => isJsonRpcResponse(item) && item.id === requestId);
     if (match) return match;
     throw new Error("Invalid Exa search response.");
   }
@@ -653,12 +596,8 @@ function extractJsonRpcResponse(
   throw new Error("Invalid Exa search response.");
 }
 
-async function parseSseResponse(
-  response: Response,
-  requestId: string,
-): Promise<unknown> {
-  if (!response.body)
-    throw new Error("Exa search response stream missing body.");
+async function parseSseResponse(response: Response, requestId: string): Promise<unknown> {
+  if (!response.body) throw new Error("Exa search response stream missing body.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -706,8 +645,7 @@ async function callExaWebSearch(
     }),
     signal,
   });
-  if (!response.ok)
-    throw new Error(`Exa search request failed (HTTP ${response.status}).`);
+  if (!response.ok) throw new Error(`Exa search request failed (HTTP ${response.status}).`);
   const contentType = response.headers.get("content-type") ?? "";
   const payload = contentType.includes("application/json")
     ? await response.json()
@@ -717,8 +655,7 @@ async function callExaWebSearch(
           throw new Error("Unexpected Exa search response.");
         })();
   const json = extractJsonRpcResponse(payload, id);
-  if (json.error)
-    throw new Error(`Exa search failed: ${json.error.message.slice(0, 300)}`);
+  if (json.error) throw new Error(`Exa search failed: ${json.error.message.slice(0, 300)}`);
   return json.result;
 }
 
@@ -738,26 +675,16 @@ function renderWebsearchResult(
   context?: { state?: any; invalidate?: () => void },
 ) {
   const text = result.content?.find((item) => item.type === "text")?.text ?? "";
-  const status = options.isPartial
-    ? "running"
-    : result.isError
-      ? "error"
-      : "ok";
+  const status = options.isPartial ? "running" : result.isError ? "error" : "ok";
   const error =
-    status === "error"
-      ? `error: ${text.split("\n", 1)[0] ?? ""}`.slice(0, 80)
-      : undefined;
-  if (
-    context?.state &&
-    (context.state.status !== status || context.state.err !== error)
-  ) {
+    status === "error" ? `error: ${text.split("\n", 1)[0] ?? ""}`.slice(0, 80) : undefined;
+  if (context?.state && (context.state.status !== status || context.state.err !== error)) {
     context.state.status = status;
     context.state.err = error;
     context.invalidate?.();
   }
   return new Container();
 }
-
 
 async function packageWebfetchOutput(
   fullOutput: string,
@@ -787,8 +714,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "webfetch",
     label: "webfetch",
-    description:
-      "Fetch a URL and return extracted markdown, HTML, or raw content.",
+    description: "Fetch a URL and return extracted markdown, HTML, or raw content.",
     parameters: webfetchSchema,
     renderCall: (args, theme, context) => {
       const url = args.url ?? "(missing url)";
@@ -800,17 +726,14 @@ export default function (pi: ExtensionAPI) {
     },
     renderResult: (result, { isPartial }, _theme, context) => {
       const details = result.details as WebfetchDetails | undefined;
-      const text =
-        (details?.displayText ?? extractText(result)) || "(no output)";
+      const text = (details?.displayText ?? extractText(result)) || "(no output)";
       const status = isPartial
         ? "running"
         : (result as { isError?: boolean }).isError
           ? "error"
           : "ok";
       const error =
-        status === "error"
-          ? `error: ${text.split("\n", 1)[0] ?? ""}`.slice(0, 80)
-          : undefined;
+        status === "error" ? `error: ${text.split("\n", 1)[0] ?? ""}`.slice(0, 80) : undefined;
       if (context.state.status !== status || context.state.err !== error) {
         context.state.status = status;
         context.state.err = error;
@@ -828,10 +751,7 @@ export default function (pi: ExtensionAPI) {
         throw new Error("webfetch requires a valid URL");
       }
       const deadline = Date.now() + FETCH_TIMEOUT_MS;
-      const { signal: fetchSignal, cleanup } = createMergedSignal(
-        signal,
-        FETCH_TIMEOUT_MS,
-      );
+      const { signal: fetchSignal, cleanup } = createMergedSignal(signal, FETCH_TIMEOUT_MS);
       try {
         if (isRedditUrl(parsedUrl)) {
           const reddit = await fetchReddit(parsedUrl, fetchSignal);
@@ -950,23 +870,14 @@ export default function (pi: ExtensionAPI) {
       let resolved: { endpoint: string; apiKey?: string } | undefined;
       try {
         resolved = resolveEndpoint();
-        const { signal: requestSignal, cleanup } = createMergedSignal(
-          signal,
-          WEBSEARCH_TIMEOUT_MS,
-        );
+        const { signal: requestSignal, cleanup } = createMergedSignal(signal, WEBSEARCH_TIMEOUT_MS);
         try {
-          const result = await callExaWebSearch(
-            resolved.endpoint,
-            params,
-            requestSignal,
-          );
+          const result = await callExaWebSearch(resolved.endpoint, params, requestSignal);
           const rawText =
             isRecord(result) && Array.isArray(result.content)
               ? result.content
                   .map((block) =>
-                    isRecord(block) &&
-                    block.type === "text" &&
-                    typeof block.text === "string"
+                    isRecord(block) && block.type === "text" && typeof block.text === "string"
                       ? block.text
                       : toJsonString(block),
                   )
@@ -979,8 +890,7 @@ export default function (pi: ExtensionAPI) {
             extension: "txt",
           });
           let text = truncation.content;
-          if (fullOutputPath)
-            text += `\n\n${formatTruncationNotice(truncation, fullOutputPath)}`;
+          if (fullOutputPath) text += `\n\n${formatTruncationNotice(truncation, fullOutputPath)}`;
           if (truncation.firstLineExceedsLimit && rawText.length > 0) {
             text = `[First line exceeded ${formatSize(truncation.maxBytes)} limit. Full output saved to: ${fullOutputPath ?? "N/A"}]\n${text}`;
           }
