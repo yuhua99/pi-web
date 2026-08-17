@@ -873,7 +873,13 @@ export default function (pi: ExtensionAPI) {
             await readBodyCapped(response, MAX_ERROR_BODY_BYTES),
             contentTypeHeader,
           )
-            .replace(/[\u0000-\u001f\u007f]+/g, " ")
+            .replace(
+              new RegExp(
+                `[${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}]+`,
+                "g",
+              ),
+              " ",
+            )
             .trim();
           throw requestError(response, url, errorBody);
         }
