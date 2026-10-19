@@ -8,6 +8,7 @@ A Pi Coding Agent extension that adds `webfetch` and `websearch` tools for web c
 - Search the web through Exa's MCP endpoint with `websearch`.
 - Fetch Reddit listings and posts, including `redd.it` short links, using a Reddit session cookie.
 - Fetch X status URLs using X authentication cookies.
+- Fall back to the Jina Reader when a page blocks bots or renders only with JavaScript.
 
 ## Installation
 
@@ -26,6 +27,16 @@ export EXA_API_KEY='…'
 ```
 
 The variable is optional.
+
+### Jina Reader
+
+`webfetch` retries Markdown requests through `r.jina.ai` when the site blocks the request (Cloudflare, Anubis, WAF, 401/403, 429) or the HTML has no readable text. The target URL is sent to Jina. Set `JINA_API_KEY` to raise the rate limit and enable browser rendering:
+
+```bash
+export JINA_API_KEY='…'
+```
+
+The variable is optional; without it, requests are anonymous.
 
 ### Reddit
 

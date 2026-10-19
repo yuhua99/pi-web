@@ -59,6 +59,7 @@ type WebfetchDetails = {
   format: "markdown" | "html" | "raw";
   metadata?: HtmlMetadata;
   usedFallback?: boolean;
+  via?: "jina";
   displayText?: string;
   truncation?: TruncationResult;
   fullOutputPath?: string;
@@ -92,6 +93,8 @@ const MAX_REDIRECTS = 5;
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const DEFAULT_EXA_ENDPOINT = "https://mcp.exa.ai/mcp";
+const JINA_READER_ENDPOINT = "https://r.jina.ai/";
+const JINA_TIMEOUT_MS = 60_000;
 
 class PolicyError extends Error {}
 class TimeoutBudgetError extends Error {}
@@ -659,6 +662,47 @@ async function callExaWebSearch(
   return json.result;
 }
 
+async function fetchJina(
+  url: URL,
+  parentSignal: AbortSignal | undefined,
+): Promise<{ url: string; status: number; content: string; metadata: HtmlMetadata }> {
+  const apiKey = process.env.JINA_API_KEY?.trim();
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+    headers["X-Engine"] = "cf-browser-rendering";
+  }
+  const { signal, cleanup } = createMergedSignal(parentSignal, JINA_TIMEOUT_MS);
+  try {
+    const response = await undiciFetch(`${JINA_READER_ENDPOINT}${url}`, { headers, signal });
+    const buffer = await readBodyCapped(response, MAX_RESPONSE_BYTES);
+    if (buffer.length >= MAX_RESPONSE_BYTES)
+      throw new Error(`Jina response exceeds ${formatSize(MAX_RESPONSE_BYTES)}`);
+    const body = buffer.toString("utf8");
+    let json: unknown;
+    try {
+      json = JSON.parse(body);
+    } catch {}
+    const data = isRecord(json) && isRecord(json.data) ? json.data : undefined;
+    const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+    const targetError = text(data?.warning)?.match(/Target URL returned error \d{3}.*/)?.[0];
+    if (!response.ok || typeof data?.content !== "string" || targetError) {
+      const message =
+        targetError ??
+        (isRecord(json) && typeof json.message === "string" ? json.message : "invalid response");
+      throw new Error(`Jina HTTP ${response.status}: ${message.slice(0, 200)}`);
+    }
+    return {
+      url: text(data.url) ?? url.toString(),
+      status: response.status,
+      content: data.content,
+      metadata: { title: text(data.title), publishedTime: text(data.publishedTime) },
+    };
+  } finally {
+    cleanup();
+  }
+}
+
 function localDate(): string {
   const date = new Date();
   const part = (value: number) => String(value).padStart(2, "0");
@@ -750,6 +794,22 @@ export default function (pi: ExtensionAPI) {
       } catch {
         throw new Error("webfetch requires a valid URL");
       }
+      const viaJina = async (target: URL) => {
+        const jina = await fetchJina(target, signal);
+        const contentType = "text/markdown";
+        return packageWebfetchOutput(
+          `${utils.formatMetadataBlock(jina.metadata, { url: jina.url, contentType })}\n\n${jina.content}`,
+          {
+            url: jina.url,
+            status: jina.status,
+            contentType,
+            format: "markdown",
+            metadata: jina.metadata,
+            via: "jina",
+          },
+          "pi-webfetch-jina",
+        );
+      };
       const deadline = Date.now() + FETCH_TIMEOUT_MS;
       const { signal: fetchSignal, cleanup } = createMergedSignal(signal, FETCH_TIMEOUT_MS);
       try {
@@ -801,7 +861,17 @@ export default function (pi: ExtensionAPI) {
               " ",
             )
             .trim();
-          throw requestError(response, url, errorBody);
+          const error = requestError(response, url, errorBody);
+          if (!params.raw && params.format !== "html" && classifyBlock(response, errorBody)) {
+            try {
+              return await viaJina(url);
+            } catch (jinaError) {
+              if (signal?.aborted) throw jinaError;
+              const reason = jinaError instanceof Error ? jinaError.message : String(jinaError);
+              throw new Error(`${error.message}\nJina fallback failed: ${reason}`);
+            }
+          }
+          throw error;
         }
         const contentType = contentTypeHeader?.split(";")[0]?.trim();
         const body = decodeBody(
@@ -824,6 +894,13 @@ export default function (pi: ExtensionAPI) {
             outputContent = htmlContent;
             effectiveFormat = "html";
           } else {
+            if (!extracted.text) {
+              try {
+                return await viaJina(url);
+              } catch (error) {
+                if (signal?.aborted) throw error;
+              }
+            }
             outputContent = utils.convertHtmlToMarkdown(htmlContent);
             effectiveFormat = "markdown";
           }
